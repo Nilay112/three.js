@@ -1,4 +1,10 @@
 .DS_Store
 *.swp
 .project
-utils/npm/node_modules/*
+node_modules
+.idea/
+.vscode/
+npm-debug.log
+.jshintrc
+.vs/
+test/unit/three.*.unit.js

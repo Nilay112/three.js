@@ -4,39 +4,73 @@
  * @author WestLangley / http://github.com/WestLangley
 */
 
-THREE.Camera = function () {
+import { Matrix4 } from '../math/Matrix4.js';
+import { Object3D } from '../core/Object3D.js';
+import { Vector3 } from '../math/Vector3.js';
 
-	THREE.Object3D.call( this );
+function Camera() {
 
-	this.matrixWorldInverse = new THREE.Matrix4();
+	Object3D.call( this );
 
-	this.projectionMatrix = new THREE.Matrix4();
-	this.projectionMatrixInverse = new THREE.Matrix4();
+	this.type = 'Camera';
 
-};
+	this.matrixWorldInverse = new Matrix4();
 
-THREE.Camera.prototype = Object.create( THREE.Object3D.prototype );
+	this.projectionMatrix = new Matrix4();
+	this.projectionMatrixInverse = new Matrix4();
 
-THREE.Camera.prototype.lookAt = function () {
+}
 
-	// This routine does not support cameras with rotated and/or translated parent(s)
+Camera.prototype = Object.assign( Object.create( Object3D.prototype ), {
 
-	var m1 = new THREE.Matrix4();
+	constructor: Camera,
 
-	return function ( vector ) {
+	isCamera: true,
 
-		m1.lookAt( this.position, vector, this.up );
+	copy: function ( source, recursive ) {
 
-		if ( this.useQuaternion === true )  {
+		Object3D.prototype.copy.call( this, source, recursive );
 
-			this.quaternion.setFromRotationMatrix( m1 );
+		this.matrixWorldInverse.copy( source.matrixWorldInverse );
 
-		} else {
+		this.projectionMatrix.copy( source.projectionMatrix );
+		this.projectionMatrixInverse.copy( source.projectionMatrixInverse );
 
-			this.rotation.setEulerFromRotationMatrix( m1, this.eulerOrder );
+		return this;
+
+	},
+
+	getWorldDirection: function ( target ) {
+
+		if ( target === undefined ) {
+
+			console.warn( 'THREE.Camera: .getWorldDirection() target is now required' );
+			target = new Vector3();
 
 		}
 
-	};
+		this.updateMatrixWorld( true );
 
-}();
+		var e = this.matrixWorld.elements;
+
+		return target.set( - e[ 8 ], - e[ 9 ], - e[ 10 ] ).normalize();
+
+	},
+
+	updateMatrixWorld: function ( force ) {
+
+		Object3D.prototype.updateMatrixWorld.call( this, force );
+
+		this.matrixWorldInverse.getInverse( this.matrixWorld );
+
+	},
+
+	clone: function () {
+
+		return new this.constructor().copy( this );
+
+	}
+
+} );
+
+export { Camera };

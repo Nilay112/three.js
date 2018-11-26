@@ -1,10 +1,16 @@
 /**
  * @author mrdoob / http://mrdoob.com/
+ * @author Mugen87 / https://github.com/Mugen87
  */
 
-THREE.PointerLockControls = function ( camera ) {
+THREE.PointerLockControls = function ( camera, domElement ) {
 
 	var scope = this;
+
+	this.domElement = domElement || document.body;
+	this.isLocked = false;
+
+	camera.rotation.set( 0, 0, 0 );
 
 	var pitchObject = new THREE.Object3D();
 	pitchObject.add( camera );
@@ -13,21 +19,11 @@ THREE.PointerLockControls = function ( camera ) {
 	yawObject.position.y = 10;
 	yawObject.add( pitchObject );
 
-	var moveForward = false;
-	var moveBackward = false;
-	var moveLeft = false;
-	var moveRight = false;
-
-	var isOnObject = false;
-	var canJump = false;
-
-	var velocity = new THREE.Vector3();
-
 	var PI_2 = Math.PI / 2;
 
-	var onMouseMove = function ( event ) {
+	function onMouseMove( event ) {
 
-		if ( scope.enabled === false ) return;
+		if ( scope.isLocked === false ) return;
 
 		var movementX = event.movementX || event.mozMovementX || event.webkitMovementX || 0;
 		var movementY = event.movementY || event.mozMovementY || event.webkitMovementY || 0;
@@ -37,73 +33,53 @@ THREE.PointerLockControls = function ( camera ) {
 
 		pitchObject.rotation.x = Math.max( - PI_2, Math.min( PI_2, pitchObject.rotation.x ) );
 
-	};
+	}
 
-	var onKeyDown = function ( event ) {
+	function onPointerlockChange() {
 
-		switch ( event.keyCode ) {
+		if ( document.pointerLockElement === scope.domElement ) {
 
-			case 38: // up
-			case 87: // w
-				moveForward = true;
-				break;
+			scope.dispatchEvent( { type: 'lock' } );
 
-			case 37: // left
-			case 65: // a
-				moveLeft = true; break;
+			scope.isLocked = true;
 
-			case 40: // down
-			case 83: // s
-				moveBackward = true;
-				break;
+		} else {
 
-			case 39: // right
-			case 68: // d
-				moveRight = true;
-				break;
+			scope.dispatchEvent( { type: 'unlock' } );
 
-			case 32: // space
-				if ( canJump === true ) velocity.y += 10;
-				canJump = false;
-				break;
+			scope.isLocked = false;
 
 		}
 
-	};
+	}
 
-	var onKeyUp = function ( event ) {
+	function onPointerlockError() {
 
-		switch( event.keyCode ) {
+		console.error( 'THREE.PointerLockControls: Unable to use Pointer Lock API' );
 
-			case 38: // up
-			case 87: // w
-				moveForward = false;
-				break;
+	}
 
-			case 37: // left
-			case 65: // a
-				moveLeft = false;
-				break;
+	this.connect = function () {
 
-			case 40: // down
-			case 83: // a
-				moveBackward = false;
-				break;
-
-			case 39: // right
-			case 68: // d
-				moveRight = false;
-				break;
-
-		}
+		document.addEventListener( 'mousemove', onMouseMove, false );
+		document.addEventListener( 'pointerlockchange', onPointerlockChange, false );
+		document.addEventListener( 'pointerlockerror', onPointerlockError, false );
 
 	};
 
-	document.addEventListener( 'mousemove', onMouseMove, false );
-	document.addEventListener( 'keydown', onKeyDown, false );
-	document.addEventListener( 'keyup', onKeyUp, false );
+	this.disconnect = function () {
 
-	this.enabled = false;
+		document.removeEventListener( 'mousemove', onMouseMove, false );
+		document.removeEventListener( 'pointerlockchange', onPointerlockChange, false );
+		document.removeEventListener( 'pointerlockerror', onPointerlockError, false );
+
+	};
+
+	this.dispose = function () {
+
+		this.disconnect();
+
+	};
 
 	this.getObject = function () {
 
@@ -111,49 +87,40 @@ THREE.PointerLockControls = function ( camera ) {
 
 	};
 
-	this.isOnObject = function ( boolean ) {
+	this.getDirection = function () {
 
-		isOnObject = boolean;
-		canJump = boolean;
+		// assumes the camera itself is not rotated
+
+		var direction = new THREE.Vector3( 0, 0, - 1 );
+		var rotation = new THREE.Euler( 0, 0, 0, 'YXZ' );
+
+		return function ( v ) {
+
+			rotation.set( pitchObject.rotation.x, yawObject.rotation.y, 0 );
+
+			v.copy( direction ).applyEuler( rotation );
+
+			return v;
+
+		};
+
+	}();
+
+	this.lock = function () {
+
+		this.domElement.requestPointerLock();
+
+	};
+
+	this.unlock = function () {
+
+		document.exitPointerLock();
 
 	};
 
-	this.update = function ( delta ) {
-
-		if ( scope.enabled === false ) return;
-
-		delta *= 0.1;
-
-		velocity.x += ( - velocity.x ) * 0.08 * delta;
-		velocity.z += ( - velocity.z ) * 0.08 * delta;
-
-		velocity.y -= 0.25 * delta;
-
-		if ( moveForward ) velocity.z -= 0.12 * delta;
-		if ( moveBackward ) velocity.z += 0.12 * delta;
-
-		if ( moveLeft ) velocity.x -= 0.12 * delta;
-		if ( moveRight ) velocity.x += 0.12 * delta;
-
-		if ( isOnObject === true ) {
-
-			velocity.y = Math.max( 0, velocity.y );
-
-		}
-
-		yawObject.translateX( velocity.x );
-		yawObject.translateY( velocity.y ); 
-		yawObject.translateZ( velocity.z );
-
-		if ( yawObject.position.y < 10 ) {
-
-			velocity.y = 0;
-			yawObject.position.y = 10;
-
-			canJump = true;
-
-		}
-
-	};
+	this.connect();
 
 };
+
+THREE.PointerLockControls.prototype = Object.create( THREE.EventDispatcher.prototype );
+THREE.PointerLockControls.prototype.constructor = THREE.PointerLockControls;

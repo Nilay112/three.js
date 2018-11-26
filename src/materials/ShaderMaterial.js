@@ -1,45 +1,38 @@
+import { Material } from './Material.js';
+import { UniformsUtils } from '../renderers/shaders/UniformsUtils.js';
+
 /**
  * @author alteredq / http://alteredqualia.com/
  *
  * parameters = {
+ *  defines: { "label" : "value" },
+ *  uniforms: { "parameter1": { value: 1.0 }, "parameter2": { value2: 2 } },
+ *
  *  fragmentShader: <string>,
  *  vertexShader: <string>,
- *
- *  uniforms: { "parameter1": { type: "f", value: 1.0 }, "parameter2": { type: "i" value2: 2 } },
- *
- *  defines: { "label" : "value" },
- *
- *  shading: THREE.SmoothShading,
- *  blending: THREE.NormalBlending,
- *  depthTest: <bool>,
- *  depthWrite: <bool>,
  *
  *  wireframe: <boolean>,
  *  wireframeLinewidth: <float>,
  *
  *  lights: <bool>,
  *
- *  vertexColors: THREE.NoColors / THREE.VertexColors / THREE.FaceColors,
- *
  *  skinning: <bool>,
  *  morphTargets: <bool>,
- *  morphNormals: <bool>,
- *
- *	fog: <bool>
+ *  morphNormals: <bool>
  * }
  */
 
-THREE.ShaderMaterial = function ( parameters ) {
+function ShaderMaterial( parameters ) {
 
-	THREE.Material.call( this );
+	Material.call( this );
 
-	this.fragmentShader = "void main() {}";
-	this.vertexShader = "void main() {}";
-	this.uniforms = {};
+	this.type = 'ShaderMaterial';
+
 	this.defines = {};
-	this.attributes = null;
+	this.uniforms = {};
 
-	this.shading = THREE.SmoothShading;
+	this.vertexShader = 'void main() {\n\tgl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );\n}';
+	this.fragmentShader = 'void main() {\n\tgl_FragColor = vec4( 1.0, 0.0, 0.0, 1.0 );\n}';
 
 	this.linewidth = 1;
 
@@ -47,52 +40,151 @@ THREE.ShaderMaterial = function ( parameters ) {
 	this.wireframeLinewidth = 1;
 
 	this.fog = false; // set to use scene fog
-
 	this.lights = false; // set to use scene lights
-
-	this.vertexColors = THREE.NoColors; // set to use "color" attribute stream
+	this.clipping = false; // set to use user-defined clipping planes
 
 	this.skinning = false; // set to use skinning attribute streams
-
 	this.morphTargets = false; // set to use morph targets
 	this.morphNormals = false; // set to use morph normals
 
-	this.setValues( parameters );
+	this.extensions = {
+		derivatives: false, // set to use derivatives
+		fragDepth: false, // set to use fragment depth values
+		drawBuffers: false, // set to use draw buffers
+		shaderTextureLOD: false // set to use shader texture LOD
+	};
+
+	// When rendered geometry doesn't include these attributes but the material does,
+	// use these default values in WebGL. This avoids errors when buffer data is missing.
+	this.defaultAttributeValues = {
+		'color': [ 1, 1, 1 ],
+		'uv': [ 0, 0 ],
+		'uv2': [ 0, 0 ]
+	};
+
+	this.index0AttributeName = undefined;
+	this.uniformsNeedUpdate = false;
+
+	if ( parameters !== undefined ) {
+
+		if ( parameters.attributes !== undefined ) {
+
+			console.error( 'THREE.ShaderMaterial: attributes should now be defined in THREE.BufferGeometry instead.' );
+
+		}
+
+		this.setValues( parameters );
+
+	}
+
+}
+
+ShaderMaterial.prototype = Object.create( Material.prototype );
+ShaderMaterial.prototype.constructor = ShaderMaterial;
+
+ShaderMaterial.prototype.isShaderMaterial = true;
+
+ShaderMaterial.prototype.copy = function ( source ) {
+
+	Material.prototype.copy.call( this, source );
+
+	this.fragmentShader = source.fragmentShader;
+	this.vertexShader = source.vertexShader;
+
+	this.uniforms = UniformsUtils.clone( source.uniforms );
+
+	this.defines = Object.assign( {}, source.defines );
+
+	this.wireframe = source.wireframe;
+	this.wireframeLinewidth = source.wireframeLinewidth;
+
+	this.lights = source.lights;
+	this.clipping = source.clipping;
+
+	this.skinning = source.skinning;
+
+	this.morphTargets = source.morphTargets;
+	this.morphNormals = source.morphNormals;
+
+	this.extensions = source.extensions;
+
+	return this;
 
 };
 
-THREE.ShaderMaterial.prototype = Object.create( THREE.Material.prototype );
+ShaderMaterial.prototype.toJSON = function ( meta ) {
 
-THREE.ShaderMaterial.prototype.clone = function () {
+	var data = Material.prototype.toJSON.call( this, meta );
 
-	var material = new THREE.ShaderMaterial();
+	data.uniforms = {};
 
-	THREE.Material.prototype.clone.call( this, material );
+	for ( var name in this.uniforms ) {
 
-	material.fragmentShader = this.fragmentShader;
-	material.vertexShader = this.vertexShader;
+		var uniform = this.uniforms[ name ];
+		var value = uniform.value;
 
-	material.uniforms = THREE.UniformsUtils.clone( this.uniforms );
+		if ( value.isTexture ) {
 
-	material.attributes = this.attributes;
-	material.defines = this.defines;
+			data.uniforms[ name ] = {
+				type: 't',
+				value: value.toJSON( meta ).uuid
+			};
 
-	material.shading = this.shading;
+		} else if ( value.isColor ) {
 
-	material.wireframe = this.wireframe;
-	material.wireframeLinewidth = this.wireframeLinewidth;
+			data.uniforms[ name ] = {
+				type: 'c',
+				value: value.getHex()
+			};
 
-	material.fog = this.fog;
+		} else if ( value.isVector2 ) {
 
-	material.lights = this.lights;
+			data.uniforms[ name ] = {
+				type: 'v2',
+				value: value.toArray()
+			};
 
-	material.vertexColors = this.vertexColors;
+		} else if ( value.isVector3 ) {
 
-	material.skinning = this.skinning;
+			data.uniforms[ name ] = {
+				type: 'v3',
+				value: value.toArray()
+			};
 
-	material.morphTargets = this.morphTargets;
-	material.morphNormals = this.morphNormals;
+		} else if ( value.isVector4 ) {
 
-	return material;
+			data.uniforms[ name ] = {
+				type: 'v4',
+				value: value.toArray()
+			};
+
+		} else if ( value.isMatrix4 ) {
+
+			data.uniforms[ name ] = {
+				type: 'm4',
+				value: value.toArray()
+			};
+
+		} else {
+
+			data.uniforms[ name ] = {
+				value: value
+			};
+
+			// note: the array variants v2v, v3v, v4v, m4v and tv are not supported so far
+
+		}
+
+	}
+
+	if ( Object.keys( this.defines ).length > 0 ) data.defines = this.defines;
+
+	data.vertexShader = this.vertexShader;
+	data.fragmentShader = this.fragmentShader;
+
+	return data;
 
 };
+
+
+export { ShaderMaterial };

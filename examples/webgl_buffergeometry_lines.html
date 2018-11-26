@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 	<head>
-		<title>three.js webgl - buffergeometry</title>
+		<title>three.js webgl - buffergeometry - lines</title>
 		<meta charset="utf-8">
 		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
 		<style>
@@ -23,7 +23,6 @@
 			}
 
 			a {
-
 				color: #0080ff;
 			}
 
@@ -32,16 +31,20 @@
 	<body>
 
 		<div id="container"></div>
-		<div id="info"><a href="http://threejs.org" target="_blank">three.js</a> webgl - buffergeometry</div>
+		<div id="info"><a href="http://threejs.org" target="_blank" rel="noopener">three.js</a> webgl - buffergeometry - lines</div>
 
-		<script src="../build/three.min.js"></script>
+		<script src="../build/three.js"></script>
 
-		<script src="js/Detector.js"></script>
+		<script src="js/WebGL.js"></script>
 		<script src="js/libs/stats.min.js"></script>
 
 		<script>
 
-			if ( ! Detector.webgl ) Detector.addGetWebGLMessage();
+			if ( WEBGL.isWebGLAvailable() === false ) {
+
+				document.body.appendChild( WEBGL.getWebGLErrorMessage() );
+
+			}
 
 			var container, stats;
 
@@ -63,27 +66,13 @@
 
 				scene = new THREE.Scene();
 
-
 				var segments = 10000;
 
 				var geometry = new THREE.BufferGeometry();
-				var material = new THREE.LineBasicMaterial({ vertexColors: true });
+				var material = new THREE.LineBasicMaterial( { vertexColors: THREE.VertexColors } );
 
-				geometry.attributes = {
-					position: {
-						itemSize: 3,
-						array: new Float32Array(segments * 3),
-						numItems: segments * 3
-					},
-					color: {
-						itemSize: 3,
-						array: new Float32Array(segments * 3),
-						numItems: segments * 3
-					}
-				};
-
-				var positions = geometry.attributes.position.array;
-				var colors = geometry.attributes.color.array;
+				var positions = [];
+				var colors = [];
 
 				var r = 800;
 
@@ -95,17 +84,18 @@
 
 					// positions
 
-					positions[ i * 3 ] = x;
-					positions[ i * 3 + 1 ] = y;
-					positions[ i * 3 + 2 ] = z;
+					positions.push( x, y, z );
 
 					// colors
 
-					colors[ i * 3 ] = ( x / r ) + 0.5;
-					colors[ i * 3 + 1 ] = ( y / r ) + 0.5;
-					colors[ i * 3 + 2 ] = ( z / r ) + 0.5;
+					colors.push( ( x / r ) + 0.5 );
+					colors.push( ( y / r ) + 0.5 );
+					colors.push( ( z / r ) + 0.5 );
 
 				}
+
+				geometry.addAttribute( 'position', new THREE.Float32BufferAttribute( positions, 3 ) );
+				geometry.addAttribute( 'color', new THREE.Float32BufferAttribute( colors, 3 ) );
 
 				geometry.computeBoundingSphere();
 
@@ -114,21 +104,19 @@
 
 				//
 
-				renderer = new THREE.WebGLRenderer( { antialias: false, clearColor: 0x000000, clearAlpha: 0, alpha: true } );
+				renderer = new THREE.WebGLRenderer();
+				renderer.setPixelRatio( window.devicePixelRatio );
 				renderer.setSize( window.innerWidth, window.innerHeight );
 
 				renderer.gammaInput = true;
 				renderer.gammaOutput = true;
-				renderer.physicallyBasedShading = true;
 
 				container.appendChild( renderer.domElement );
 
 				//
 
 				stats = new Stats();
-				stats.domElement.style.position = 'absolute';
-				stats.domElement.style.top = '0px';
-				container.appendChild( stats.domElement );
+				container.appendChild( stats.dom );
 
 				//
 

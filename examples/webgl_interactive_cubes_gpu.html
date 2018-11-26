@@ -30,15 +30,15 @@
 	<body>
 
 		<div class="info">
-			<a href="http://threejs.org" target="_blank">three.js</a> webgl - gpu picking
+			<a href="http://threejs.org" target="_blank" rel="noopener">three.js</a> webgl - gpu picking
 		</div>
 
 		<div id="container"></div>
 
-		<script src="../build/three.min.js"></script>
+		<script src="../build/three.js"></script>
 
 		<script src="js/controls/TrackballControls.js"></script>
-
+		<script src="js/utils/BufferGeometryUtils.js"></script>
 		<script src="js/libs/stats.min.js"></script>
 
 		<script>
@@ -46,7 +46,6 @@
 			var container, stats;
 			var camera, controls, scene, renderer;
 			var pickingData = [], pickingTexture, pickingScene;
-			var objects = [];
 			var highlightBox;
 
 			var mouse = new THREE.Vector2();
@@ -72,10 +71,11 @@
 				controls.dynamicDampingFactor = 0.3;
 
 				scene = new THREE.Scene();
+				scene.background = new THREE.Color( 0xffffff );
 
 				pickingScene = new THREE.Scene();
 				pickingTexture = new THREE.WebGLRenderTarget( window.innerWidth, window.innerHeight );
-				pickingTexture.generateMipmaps = false;
+				pickingTexture.texture.minFilter = THREE.LinearFilter;
 
 				scene.add( new THREE.AmbientLight( 0x555555 ) );
 
@@ -83,72 +83,68 @@
 				light.position.set( 0, 500, 2000 );
 				scene.add( light );
 
-				var geometry = new THREE.Geometry(),
-				pickingGeometry = new THREE.Geometry(),
-				pickingMaterial = new THREE.MeshBasicMaterial( { vertexColors: THREE.VertexColors } ),
-				defaultMaterial = new THREE.MeshLambertMaterial({ color: 0xffffff, shading: THREE.FlatShading, vertexColors: THREE.VertexColors	} );
+				var pickingMaterial = new THREE.MeshBasicMaterial( { vertexColors: THREE.VertexColors } );
+				var defaultMaterial = new THREE.MeshPhongMaterial( { color: 0xffffff, flatShading: true, vertexColors: THREE.VertexColors, shininess: 0	} );
 
-				function applyVertexColors( g, c ) {
+				function applyVertexColors( geometry, color ) {
 
-					g.faces.forEach( function( f ) {
+					var position = geometry.attributes.position;
+					var colors = [];
 
-						var n = ( f instanceof THREE.Face3 ) ? 3 : 4;
+					for ( var i = 0; i < position.count; i ++ ) {
 
-						for( var j = 0; j < n; j ++ ) {
+						colors.push( color.r, color.g, color.b );
 
-							f.vertexColors[ j ] = c;
+					}
 
-						}
-
-					} );
+					geometry.addAttribute( 'color', new THREE.Float32BufferAttribute( colors, 3 ) );
 
 				}
 
+				var geometriesDrawn = [];
+				var geometriesPicking = [];
+
+				var matrix = new THREE.Matrix4();
+				var quaternion = new THREE.Quaternion();
+				var color = new THREE.Color();
+
 				for ( var i = 0; i < 5000; i ++ ) {
 
-					var position = new THREE.Vector3();
+					var geometry = new THREE.BoxBufferGeometry();
 
+					var position = new THREE.Vector3();
 					position.x = Math.random() * 10000 - 5000;
 					position.y = Math.random() * 6000 - 3000;
 					position.z = Math.random() * 8000 - 4000;
 
-					var rotation = new THREE.Vector3();
-
+					var rotation = new THREE.Euler();
 					rotation.x = Math.random() * 2 * Math.PI;
 					rotation.y = Math.random() * 2 * Math.PI;
 					rotation.z = Math.random() * 2 * Math.PI;
 
 					var scale = new THREE.Vector3();
-
 					scale.x = Math.random() * 200 + 100;
 					scale.y = Math.random() * 200 + 100;
 					scale.z = Math.random() * 200 + 100;
 
-					// give the geom's vertices a random color, to be displayed
+					quaternion.setFromEuler( rotation, false );
+					matrix.compose( position, quaternion, scale );
 
-					var geom = new THREE.CubeGeometry( 1, 1, 1 );
-					var color = new THREE.Color( Math.random() * 0xffffff );
-					applyVertexColors( geom, color );
+					geometry.applyMatrix( matrix );
 
-					var cube = new THREE.Mesh( geom );
-					cube.position.copy( position );
-					cube.rotation.copy( rotation );
-					cube.scale.copy( scale );
+					// give the geometry's vertices a random color, to be displayed
 
-					THREE.GeometryUtils.merge( geometry, cube );
+					applyVertexColors( geometry, color.setHex( Math.random() * 0xffffff ) );
 
-					//give the pickingGeom's vertices a color corresponding to the "id"
+					geometriesDrawn.push( geometry );
 
-					var pickingGeom = new THREE.CubeGeometry( 1, 1, 1 );
-					var pickingColor = new THREE.Color( i );
-					applyVertexColors( pickingGeom, pickingColor );
+					geometry = geometry.clone();
 
-					var pickingCube = new THREE.Mesh( pickingGeom );
-					pickingCube.position.copy( position );
-					pickingCube.rotation.copy( rotation );
-					pickingCube.scale.copy( scale );
+					// give the geometry's vertices a color corresponding to the "id"
 
-					THREE.GeometryUtils.merge( pickingGeometry, pickingCube );
+					applyVertexColors( geometry, color.setHex( i ) );
+
+					geometriesPicking.push( geometry );
 
 					pickingData[ i ] = {
 
@@ -160,26 +156,24 @@
 
 				}
 
-				var drawnObject = new THREE.Mesh( geometry, defaultMaterial );
-				scene.add( drawnObject );
+				var objects = new THREE.Mesh( THREE.BufferGeometryUtils.mergeBufferGeometries( geometriesDrawn ), defaultMaterial );
+				scene.add( objects );
 
-				pickingScene.add( new THREE.Mesh( pickingGeometry, pickingMaterial ) );
+				pickingScene.add( new THREE.Mesh( THREE.BufferGeometryUtils.mergeBufferGeometries( geometriesPicking ), pickingMaterial ) );
 
-				highlightBox = new THREE.Mesh( new THREE.CubeGeometry( 1, 1, 1 ), new THREE.MeshLambertMaterial( { color: 0xffff00 } ) );
+				highlightBox = new THREE.Mesh(
+					new THREE.BoxBufferGeometry(),
+					new THREE.MeshLambertMaterial( { color: 0xffff00 }
+					) );
 				scene.add( highlightBox );
 
-				projector = new THREE.Projector();
-
-				renderer = new THREE.WebGLRenderer( { antialias: true, clearColor: 0xffffff } );
-				renderer.sortObjects = false;
+				renderer = new THREE.WebGLRenderer( { antialias: true } );
+				renderer.setPixelRatio( window.devicePixelRatio );
 				renderer.setSize( window.innerWidth, window.innerHeight );
-
 				container.appendChild( renderer.domElement );
 
 				stats = new Stats();
-				stats.domElement.style.position = 'absolute';
-				stats.domElement.style.top = '0px';
-				container.appendChild( stats.domElement );
+				container.appendChild( stats.dom );
 
 				renderer.domElement.addEventListener( 'mousemove', onMouseMove );
 
@@ -209,23 +203,24 @@
 
 				renderer.render( pickingScene, camera, pickingTexture );
 
-				var gl = self.renderer.getContext();
+				//create buffer for reading single pixel
+
+				var pixelBuffer = new Uint8Array( 4 );
 
 				//read the pixel under the mouse from the texture
 
-				var pixelBuffer = new Uint8Array( 4 );
-				gl.readPixels( mouse.x, pickingTexture.height - mouse.y, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixelBuffer );
+				renderer.readRenderTargetPixels( pickingTexture, mouse.x, pickingTexture.height - mouse.y, 1, 1, pixelBuffer );
 
 				//interpret the pixel as an ID
 
-				var id = ( pixelBuffer[0] << 16 ) | ( pixelBuffer[1] << 8 ) | ( pixelBuffer[2] );
+				var id = ( pixelBuffer[ 0 ] << 16 ) | ( pixelBuffer[ 1 ] << 8 ) | ( pixelBuffer[ 2 ] );
 				var data = pickingData[ id ];
 
-				if ( data) {
+				if ( data ) {
 
 					//move our highlightBox so that it surrounds the picked object
 
-					if ( data.position && data.rotation && data.scale ){
+					if ( data.position && data.rotation && data.scale ) {
 
 						highlightBox.position.copy( data.position );
 						highlightBox.rotation.copy( data.rotation );

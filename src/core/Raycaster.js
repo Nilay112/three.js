@@ -1,240 +1,134 @@
+import { Ray } from '../math/Ray.js';
+
 /**
  * @author mrdoob / http://mrdoob.com/
- * @author bhouston / http://exocortex.com/
+ * @author bhouston / http://clara.io/
+ * @author stephomi / http://stephaneginier.com/
  */
 
-( function ( THREE ) {
+function Raycaster( origin, direction, near, far ) {
 
-	THREE.Raycaster = function ( origin, direction, near, far ) {
+	this.ray = new Ray( origin, direction );
+	// direction is assumed to be normalized (for accurate distance calculations)
 
-		this.ray = new THREE.Ray( origin, direction );
+	this.near = near || 0;
+	this.far = far || Infinity;
 
-		// normalized ray.direction required for accurate distance calculations
-		if ( this.ray.direction.lengthSq() > 0 ) {
+	this.params = {
+		Mesh: {},
+		Line: {},
+		LOD: {},
+		Points: { threshold: 1 },
+		Sprite: {}
+	};
 
-			this.ray.direction.normalize();
+	Object.defineProperties( this.params, {
+		PointCloud: {
+			get: function () {
+
+				console.warn( 'THREE.Raycaster: params.PointCloud has been renamed to params.Points.' );
+				return this.Points;
+
+			}
+		}
+	} );
+
+}
+
+function ascSort( a, b ) {
+
+	return a.distance - b.distance;
+
+}
+
+function intersectObject( object, raycaster, intersects, recursive ) {
+
+	if ( object.visible === false ) return;
+
+	object.raycast( raycaster, intersects );
+
+	if ( recursive === true ) {
+
+		var children = object.children;
+
+		for ( var i = 0, l = children.length; i < l; i ++ ) {
+
+			intersectObject( children[ i ], raycaster, intersects, true );
 
 		}
 
-		this.near = near || 0;
-		this.far = far || Infinity;
+	}
 
-	};
+}
 
-	var sphere = new THREE.Sphere();
-	var localRay = new THREE.Ray();
-	var facePlane = new THREE.Plane();
-	var intersectPoint = new THREE.Vector3();
-	var matrixPosition = new THREE.Vector3();
+Object.assign( Raycaster.prototype, {
 
-	var inverseMatrix = new THREE.Matrix4();
+	linePrecision: 1,
 
-	var descSort = function ( a, b ) {
+	set: function ( origin, direction ) {
 
-		return a.distance - b.distance;
-
-	};
-
-	var intersectObject = function ( object, raycaster, intersects ) {
-
-		if ( object instanceof THREE.Particle ) {
-
-			matrixPosition.getPositionFromMatrix( object.matrixWorld );
-			var distance = raycaster.ray.distanceToPoint( matrixPosition );
-
-			if ( distance > object.scale.x ) {
-
-				return intersects;
-
-			}
-
-			intersects.push( {
-
-				distance: distance,
-				point: object.position,
-				face: null,
-				object: object
-
-			} );
-
-		} else if ( object instanceof THREE.LOD ) {
-
-			matrixPosition.getPositionFromMatrix( object.matrixWorld );
-			var distance = raycaster.ray.origin.distanceTo( matrixPosition );
-
-			intersectObject( object.getObjectForDistance( distance ), raycaster, intersects );
-
-		} else if ( object instanceof THREE.Mesh ) {
-
-			// Checking boundingSphere distance to ray
-			matrixPosition.getPositionFromMatrix( object.matrixWorld );
-			sphere.set(
-				matrixPosition,
-				object.geometry.boundingSphere.radius * object.matrixWorld.getMaxScaleOnAxis() );
-
-			if ( ! raycaster.ray.isIntersectionSphere( sphere ) ) {
-
-				return intersects;
-
-			}
-
-			// Checking faces
-
-			var geometry = object.geometry;
-			var vertices = geometry.vertices;
-
-			var isFaceMaterial = object.material instanceof THREE.MeshFaceMaterial;
-			var objectMaterials = isFaceMaterial === true ? object.material.materials : null;
-
-			var side = object.material.side;
-
-			var a, b, c, d;
-			var precision = raycaster.precision;
-
-			inverseMatrix.getInverse( object.matrixWorld );
-
-			localRay.copy( raycaster.ray ).applyMatrix4( inverseMatrix );
-
-			for ( var f = 0, fl = geometry.faces.length; f < fl; f ++ ) {
-
-				var face = geometry.faces[ f ];
-
-				var material = isFaceMaterial === true ? objectMaterials[ face.materialIndex ] : object.material;
-
-				if ( material === undefined ) continue;
-
-				facePlane.setFromNormalAndCoplanarPoint( face.normal, vertices[face.a] );
-
-				var planeDistance = localRay.distanceToPlane( facePlane );
-
-				// bail if raycaster and plane are parallel
-				if ( Math.abs( planeDistance ) < precision ) continue;
-
-				// if negative distance, then plane is behind raycaster
-				if ( planeDistance < 0 ) continue;
-
-				// check if we hit the wrong side of a single sided face
-				side = material.side;
-				if ( side !== THREE.DoubleSide ) {
-
-					var planeSign = localRay.direction.dot( facePlane.normal );
-
-					if ( ! ( side === THREE.FrontSide ? planeSign < 0 : planeSign > 0 ) ) continue;
-
-				}
-
-				// this can be done using the planeDistance from localRay because localRay wasn't normalized, but ray was
-				if ( planeDistance < raycaster.near || planeDistance > raycaster.far ) continue;
-
-				intersectPoint = localRay.at( planeDistance, intersectPoint ); // passing in intersectPoint avoids a copy
-
-				if ( face instanceof THREE.Face3 ) {
-
-					a = vertices[ face.a ];
-					b = vertices[ face.b ];
-					c = vertices[ face.c ];
-
-					if ( ! THREE.Triangle.containsPoint( intersectPoint, a, b, c ) ) continue;
-
-				} else if ( face instanceof THREE.Face4 ) {
-
-					a = vertices[ face.a ];
-					b = vertices[ face.b ];
-					c = vertices[ face.c ];
-					d = vertices[ face.d ];
-
-					if ( ( ! THREE.Triangle.containsPoint( intersectPoint, a, b, d ) ) &&
-						 ( ! THREE.Triangle.containsPoint( intersectPoint, b, c, d ) ) ) continue;
-
-				} else {
-
-					// This is added because if we call out of this if/else group when none of the cases
-					//    match it will add a point to the intersection list erroneously.
-					throw Error( "face type not supported" );
-
-				}
-
-				intersects.push( {
-
-					distance: planeDistance,	// this works because the original ray was normalized, and the transformed localRay wasn't
-					point: raycaster.ray.at( planeDistance ),
-					face: face,
-					faceIndex: f,
-					object: object
-
-				} );
-
-			}
-
-		}
-
-	};
-
-	var intersectDescendants = function ( object, raycaster, intersects ) {
-
-		var descendants = object.getDescendants();
-
-		for ( var i = 0, l = descendants.length; i < l; i ++ ) {
-
-			intersectObject( descendants[ i ], raycaster, intersects );
-
-		}
-	};
-
-	//
-
-	THREE.Raycaster.prototype.precision = 0.0001;
-
-	THREE.Raycaster.prototype.set = function ( origin, direction ) {
+		// direction is assumed to be normalized (for accurate distance calculations)
 
 		this.ray.set( origin, direction );
 
-		// normalized ray.direction required for accurate distance calculations
-		if ( this.ray.direction.length() > 0 ) {
+	},
 
-			this.ray.direction.normalize();
+	setFromCamera: function ( coords, camera ) {
+
+		if ( ( camera && camera.isPerspectiveCamera ) ) {
+
+			this.ray.origin.setFromMatrixPosition( camera.matrixWorld );
+			this.ray.direction.set( coords.x, coords.y, 0.5 ).unproject( camera ).sub( this.ray.origin ).normalize();
+
+		} else if ( ( camera && camera.isOrthographicCamera ) ) {
+
+			this.ray.origin.set( coords.x, coords.y, ( camera.near + camera.far ) / ( camera.near - camera.far ) ).unproject( camera ); // set origin in plane of camera
+			this.ray.direction.set( 0, 0, - 1 ).transformDirection( camera.matrixWorld );
+
+		} else {
+
+			console.error( 'THREE.Raycaster: Unsupported camera type.' );
 
 		}
 
-	};
+	},
 
-	THREE.Raycaster.prototype.intersectObject = function ( object, recursive ) {
+	intersectObject: function ( object, recursive, optionalTarget ) {
 
-		var intersects = [];
+		var intersects = optionalTarget || [];
 
-		if ( recursive === true ) {
+		intersectObject( object, this, intersects, recursive );
 
-			intersectDescendants( object, this, intersects );
-
-		}
-
-		intersectObject( object, this, intersects );
-
-		intersects.sort( descSort );
+		intersects.sort( ascSort );
 
 		return intersects;
 
-	};
+	},
 
-	THREE.Raycaster.prototype.intersectObjects = function ( objects, recursive ) {
+	intersectObjects: function ( objects, recursive, optionalTarget ) {
 
-		var intersects = [];
+		var intersects = optionalTarget || [];
+
+		if ( Array.isArray( objects ) === false ) {
+
+			console.warn( 'THREE.Raycaster.intersectObjects: objects is not an Array.' );
+			return intersects;
+
+		}
 
 		for ( var i = 0, l = objects.length; i < l; i ++ ) {
 
-			intersectObject( objects[ i ], this, intersects );
+			intersectObject( objects[ i ], this, intersects, recursive );
 
-			if ( recursive === true ) {
-
-				intersectDescendants( objects[ i ], this, intersects );
-
-			}
 		}
 
-		intersects.sort( descSort );
+		intersects.sort( ascSort );
 
 		return intersects;
 
-	};
+	}
 
-}( THREE ) );
+} );
+
+
+export { Raycaster };

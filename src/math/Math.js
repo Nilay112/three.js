@@ -1,22 +1,55 @@
 /**
  * @author alteredq / http://alteredqualia.com/
+ * @author mrdoob / http://mrdoob.com/
  */
 
-THREE.Math = {
+var _Math = {
 
-	// Clamp value to range <a, b>
+	DEG2RAD: Math.PI / 180,
+	RAD2DEG: 180 / Math.PI,
 
-	clamp: function ( x, a, b ) {
+	generateUUID: ( function () {
 
-		return ( x < a ) ? a : ( ( x > b ) ? b : x );
+		// http://stackoverflow.com/questions/105034/how-to-create-a-guid-uuid-in-javascript/21963136#21963136
+
+		var lut = [];
+
+		for ( var i = 0; i < 256; i ++ ) {
+
+			lut[ i ] = ( i < 16 ? '0' : '' ) + ( i ).toString( 16 );
+
+		}
+
+		return function generateUUID() {
+
+			var d0 = Math.random() * 0xffffffff | 0;
+			var d1 = Math.random() * 0xffffffff | 0;
+			var d2 = Math.random() * 0xffffffff | 0;
+			var d3 = Math.random() * 0xffffffff | 0;
+			var uuid = lut[ d0 & 0xff ] + lut[ d0 >> 8 & 0xff ] + lut[ d0 >> 16 & 0xff ] + lut[ d0 >> 24 & 0xff ] + '-' +
+				lut[ d1 & 0xff ] + lut[ d1 >> 8 & 0xff ] + '-' + lut[ d1 >> 16 & 0x0f | 0x40 ] + lut[ d1 >> 24 & 0xff ] + '-' +
+				lut[ d2 & 0x3f | 0x80 ] + lut[ d2 >> 8 & 0xff ] + '-' + lut[ d2 >> 16 & 0xff ] + lut[ d2 >> 24 & 0xff ] +
+				lut[ d3 & 0xff ] + lut[ d3 >> 8 & 0xff ] + lut[ d3 >> 16 & 0xff ] + lut[ d3 >> 24 & 0xff ];
+
+			// .toUpperCase() here flattens concatenated strings to save heap memory space.
+			return uuid.toUpperCase();
+
+		};
+
+	} )(),
+
+	clamp: function ( value, min, max ) {
+
+		return Math.max( min, Math.min( max, value ) );
 
 	},
 
-	// Clamp value to range <a, inf)
+	// compute euclidian modulo of m % n
+	// https://en.wikipedia.org/wiki/Modulo_operation
 
-	clampBottom: function ( x, a ) {
+	euclideanModulo: function ( n, m ) {
 
-		return x < a ? a : x;
+		return ( ( n % m ) + m ) % m;
 
 	},
 
@@ -28,6 +61,14 @@ THREE.Math = {
 
 	},
 
+	// https://en.wikipedia.org/wiki/Linear_interpolation
+
+	lerp: function ( x, y, t ) {
+
+		return ( 1 - t ) * x + t * y;
+
+	},
+
 	// http://en.wikipedia.org/wiki/Smoothstep
 
 	smoothstep: function ( x, min, max ) {
@@ -35,9 +76,9 @@ THREE.Math = {
 		if ( x <= min ) return 0;
 		if ( x >= max ) return 1;
 
-		x = ( x - min )/( max - min );
+		x = ( x - min ) / ( max - min );
 
-		return x*x*(3 - 2*x);
+		return x * x * ( 3 - 2 * x );
 
 	},
 
@@ -46,18 +87,9 @@ THREE.Math = {
 		if ( x <= min ) return 0;
 		if ( x >= max ) return 1;
 
-		x = ( x - min )/( max - min );
+		x = ( x - min ) / ( max - min );
 
-		return x*x*x*(x*(x*6 - 15) + 10);
-
-	},
-
-	// Random float from <0, 1> with 16 bits of randomness
-	// (standard Math.random() creates repetitive patterns when applied over larger space)
-
-	random16: function () {
-
-		return ( 65280 * Math.random() + 255 * Math.random() ) / 65535;
+		return x * x * x * ( x * ( x * 6 - 15 ) + 10 );
 
 	},
 
@@ -85,34 +117,37 @@ THREE.Math = {
 
 	},
 
-	sign: function ( x ) {
+	degToRad: function ( degrees ) {
 
-		return ( x < 0 ) ? -1 : ( ( x > 0 ) ? 1 : 0 );
+		return degrees * _Math.DEG2RAD;
 
 	},
 
-	degToRad: function() {
+	radToDeg: function ( radians ) {
 
-		var degreeToRadiansFactor = Math.PI / 180;
+		return radians * _Math.RAD2DEG;
 
-		return function ( degrees ) {
+	},
 
-			return degrees * degreeToRadiansFactor;
+	isPowerOfTwo: function ( value ) {
 
-		};
+		return ( value & ( value - 1 ) ) === 0 && value !== 0;
 
-	}(),
+	},
 
-	radToDeg: function() {
+	ceilPowerOfTwo: function ( value ) {
 
-		var radianToDegreesFactor = 180 / Math.PI;
+		return Math.pow( 2, Math.ceil( Math.log( value ) / Math.LN2 ) );
 
-		return function ( radians ) {
+	},
 
-			return radians * radianToDegreesFactor;
+	floorPowerOfTwo: function ( value ) {
 
-		};
+		return Math.pow( 2, Math.floor( Math.log( value ) / Math.LN2 ) );
 
-	}()
+	}
 
 };
+
+
+export { _Math };
