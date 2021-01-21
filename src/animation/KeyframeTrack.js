@@ -8,16 +8,6 @@ import { LinearInterpolant } from '../math/interpolants/LinearInterpolant.js';
 import { DiscreteInterpolant } from '../math/interpolants/DiscreteInterpolant.js';
 import { AnimationUtils } from './AnimationUtils.js';
 
-/**
- *
- * A timed sequence of keyframes for a specific property.
- *
- *
- * @author Ben Houston / http://clara.io/
- * @author David Sarno / http://lighthaus.us/
- * @author tschw
- */
-
 function KeyframeTrack( name, times, values, interpolation ) {
 
 	if ( name === undefined ) throw new Error( 'THREE.KeyframeTrack: track name is undefined' );
@@ -135,8 +125,8 @@ Object.assign( KeyframeTrack.prototype, {
 
 		if ( factoryMethod === undefined ) {
 
-			const message = "unsupported interpolation for " +
-				this.ValueTypeName + " keyframe track named " + this.name;
+			const message = 'unsupported interpolation for ' +
+				this.ValueTypeName + ' keyframe track named ' + this.name;
 
 			if ( this.createInterpolant === undefined ) {
 
@@ -373,7 +363,7 @@ Object.assign( KeyframeTrack.prototype, {
 
 			// remove adjacent keyframes scheduled at the same time
 
-			if ( time !== timeNext && ( i !== 1 || time !== time[ 0 ] ) ) {
+			if ( time !== timeNext && ( i !== 1 || time !== times[ 0 ] ) ) {
 
 				if ( ! smoothInterpolation ) {
 

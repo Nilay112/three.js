@@ -10,13 +10,6 @@ import { DoubleSide, BackSide } from '../constants.js';
 import { MeshBasicMaterial } from '../materials/MeshBasicMaterial.js';
 import { BufferGeometry } from '../core/BufferGeometry.js';
 
-/**
- * @author mrdoob / http://mrdoob.com/
- * @author alteredq / http://alteredqualia.com/
- * @author mikael emtinger / http://gomo.se/
- * @author jonobr1 / http://jonobr1.com/
- */
-
 const _inverseMatrix = new Matrix4();
 const _ray = new Ray();
 const _sphere = new Sphere();
@@ -40,14 +33,14 @@ const _uvC = new Vector2();
 const _intersectionPoint = new Vector3();
 const _intersectionPointWorld = new Vector3();
 
-function Mesh( geometry, material ) {
+function Mesh( geometry = new BufferGeometry(), material = new MeshBasicMaterial() ) {
 
 	Object3D.call( this );
 
 	this.type = 'Mesh';
 
-	this.geometry = geometry !== undefined ? geometry : new BufferGeometry();
-	this.material = material !== undefined ? material : new MeshBasicMaterial();
+	this.geometry = geometry;
+	this.material = material;
 
 	this.updateMorphTargets();
 
@@ -146,7 +139,7 @@ Mesh.prototype = Object.assign( Object.create( Object3D.prototype ), {
 
 		//
 
-		_inverseMatrix.getInverse( matrixWorld );
+		_inverseMatrix.copy( matrixWorld ).invert();
 		_ray.copy( raycaster.ray ).applyMatrix4( _inverseMatrix );
 
 		// Check boundingBox before continuing
